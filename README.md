@@ -5,8 +5,7 @@ How to run:
 1. Open command prompt
 2. Install prerequisites "pip install ..."
     - vulkan
-    - time
-    - sys
-    - threading
-    - ctypes
+    - time-python
+    - os-sys
+    - threaded
 3. Run code "python GPU_Never_sleep.py"
