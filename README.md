@@ -3,7 +3,5 @@ Keep all GPU's from idling to prevent issue with idling GPU
 
 How to run:
 1. Open command prompt
-2. Install prerequisites "pip install ..."
-    - vulkan
-    - threaded
+2. Install prerequisites "pip install vulkan"
 3. Run code "python GPU_Never_sleep.py"
