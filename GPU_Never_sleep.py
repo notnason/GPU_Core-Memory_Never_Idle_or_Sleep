@@ -2,10 +2,10 @@ import vulkan as vk
 import time
 import sys
 import threading
-import ctypes
+from typing import Optional, Any
 
-def get_all_gpus():
-    """Find all available GPU devices using Vulkan"""
+def get_all_gpus() -> list[tuple[Any, Any, Any]]:
+    """Find all available GPU devices using Vulkan."""
     try:
         # Create Vulkan instance
         app_info = vk.VkApplicationInfo(
@@ -31,9 +31,11 @@ def get_all_gpus():
         for device in physical_devices:
             props = vk.vkGetPhysicalDeviceProperties(device)
             # Only include GPU devices
-            if props.deviceType in [vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, 
-                                    vk.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU,
-                                    vk.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU]:
+            if props.deviceType in {
+                vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, 
+                vk.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU,
+                vk.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU
+            }:
                 gpus.append((instance, device, props))
         
         return gpus
@@ -41,21 +43,25 @@ def get_all_gpus():
         print(f"Error initializing Vulkan: {e}")
         return []
 
-def find_memory_type(physical_device, type_filter, properties):
-    """Find suitable memory type for allocation"""
+def find_memory_type(physical_device: Any, type_filter: int, properties: int) -> Optional[int]:
+    """Find suitable memory type for allocation."""
     mem_properties = vk.vkGetPhysicalDeviceMemoryProperties(physical_device)
     
     for i in range(mem_properties.memoryTypeCount):
         if (type_filter & (1 << i)) and \
            (mem_properties.memoryTypes[i].propertyFlags & properties) == properties:
             return i
-    
+            
     return None
 
-def keep_single_gpu_alive(instance, physical_device, props, gpu_index, interval=5):
-    """
-    Keep a single GPU alive by allocating and accessing VRAM
-    """
+def keep_single_gpu_alive(
+    instance: Any, 
+    physical_device: Any, 
+    props: Any, 
+    gpu_index: int, 
+    interval: int = 5
+) -> None:
+    """Keep a single GPU alive by allocating and accessing VRAM."""
     try:
         device_name = props.deviceName
         
@@ -63,11 +69,11 @@ def keep_single_gpu_alive(instance, physical_device, props, gpu_index, interval=
         queue_families = vk.vkGetPhysicalDeviceQueueFamilyProperties(physical_device)
         
         # Find any queue family (compute or graphics)
-        queue_family_index = None
-        for i, family in enumerate(queue_families):
-            if family.queueFlags & (vk.VK_QUEUE_COMPUTE_BIT | vk.VK_QUEUE_GRAPHICS_BIT):
-                queue_family_index = i
-                break
+        queue_family_index = next(
+            (i for i, family in enumerate(queue_families) 
+             if family.queueFlags & (vk.VK_QUEUE_COMPUTE_BIT | vk.VK_QUEUE_GRAPHICS_BIT)), 
+            None
+        )
         
         if queue_family_index is None:
             print(f"GPU #{gpu_index} ({device_name}) - No suitable queue found, skipping")
@@ -138,14 +144,14 @@ def keep_single_gpu_alive(instance, physical_device, props, gpu_index, interval=
         command_pool = vk.vkCreateCommandPool(logical_device, pool_info, None)
         
         # Allocate command buffer
-        alloc_info = vk.VkCommandBufferAllocateInfo(
+        command_alloc_info = vk.VkCommandBufferAllocateInfo(
             sType=vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             commandPool=command_pool,
             level=vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             commandBufferCount=1
         )
         
-        command_buffers = vk.vkAllocateCommandBuffers(logical_device, alloc_info)
+        command_buffers = vk.vkAllocateCommandBuffers(logical_device, command_alloc_info)
         command_buffer = command_buffers[0]
         
         print(f"GPU #{gpu_index} Keep-Alive started: {device_name}")
@@ -174,15 +180,14 @@ def keep_single_gpu_alive(instance, physical_device, props, gpu_index, interval=
             vk.vkQueueWaitIdle(queue)
             
             iteration += 1
-            
             time.sleep(interval)
             
     except Exception as e:
         print(f"GPU #{gpu_index} error: {e}")
 
-def keep_all_gpus_alive(interval=5):
+def keep_all_gpus_alive(interval: int = 5) -> None:
     """
-    Keep all detected GPUs alive with minimal VRAM access operations
+    Keep all detected GPUs alive with minimal VRAM access operations.
     interval: seconds between operations (default 5)
     """
     try:
@@ -200,17 +205,22 @@ def keep_all_gpus_alive(interval=5):
         print(f"Found {len(gpus)} GPU(s):\n")
         
         for i, (instance, device, props) in enumerate(gpus):
-            device_type = {
-                vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: "Discrete",
-                vk.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: "Integrated",
-                vk.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: "Virtual"
-            }.get(props.deviceType, "Unknown")
+            # Using Python 3.10+ Structural Pattern Matching for device types
+            match props.deviceType:
+                case vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                    device_type = "Discrete"
+                case vk.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                    device_type = "Integrated"
+                case vk.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                    device_type = "Virtual"
+                case _:
+                    device_type = "Unknown"
             
             print(f"  GPU #{i}: {props.deviceName} ({device_type})")
         
         print(f"\nRunning VRAM access operations every {interval} seconds on all GPUs")
-        print(f"VRAM allocated per GPU: 1 MB")
-        print(f"Keeps both GPU core and VRAM active")
+        print("VRAM allocated per GPU: 1 MB")
+        print("Keeps both GPU core and VRAM active")
         print("Press Ctrl+C to stop\n")
         
         # Create a thread for each GPU
@@ -230,7 +240,7 @@ def keep_all_gpus_alive(interval=5):
             time.sleep(1)
             
     except KeyboardInterrupt:
-        print("\n\nMulti-GPU Keep-Alive stopped by user")
+        print("\n\nMulti-GPU Keep-Alive stopped by user.")
         sys.exit(0)
     except Exception as e:
         print(f"\nError: {e}")
